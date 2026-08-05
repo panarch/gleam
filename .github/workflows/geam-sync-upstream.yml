@@ -175,6 +175,7 @@ jobs:
       - name: Open sync pull request
         if: steps.release.outputs.changed == 'true' && inputs.dry_run != true
         env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
           COMMIT: ${{ steps.release.outputs.commit }}
@@ -188,6 +189,7 @@ jobs:
             "- Upstream commit: \`$COMMIT\`" \
             "- Packaging revision: \`$REVISION\`")"
           gh pr create \
+            --repo "$GH_REPO" \
             --base geam-release \
             --head "$BRANCH" \
             --title "Sync Gleam $TAG for Geam packaging" \
