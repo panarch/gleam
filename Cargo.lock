@@ -1120,7 +1120,7 @@ dependencies = [
 
 [[package]]
 name = "geam-gleam-core"
-version = "1.18.1-geam.1"
+version = "1.18.1-geam.2"
 dependencies = [
  "age",
  "askama",
@@ -1180,7 +1180,7 @@ dependencies = [
 
 [[package]]
 name = "geam-gleam-erlang-generation"
-version = "1.18.1-geam.1"
+version = "1.18.1-geam.2"
 dependencies = [
  "ecow",
  "geam-gleam-erlang-term-format",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "geam-gleam-erlang-term-format"
-version = "1.18.1-geam.1"
+version = "1.18.1-geam.2"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "geam-gleam-hexpm"
-version = "1.18.1-geam.1"
+version = "1.18.1-geam.2"
 dependencies = [
  "base16",
  "bytes",
@@ -1225,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "geam-gleam-pretty-arena"
-version = "1.18.1-geam.1"
+version = "1.18.1-geam.2"
 dependencies = [
  "ecow",
  "im",

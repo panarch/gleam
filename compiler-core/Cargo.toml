@@ -3,7 +3,7 @@
 
 [package]
 name = "geam-gleam-core"
-version = "1.18.1-geam.1"
+version = "1.18.1-geam.2"
 authors = ["Louis Pilfold <louis@lpil.uk>"]
 edition = "2024"
 license = "Apache-2.0"
@@ -62,9 +62,9 @@ debug-ignore.workspace = true
 ecow = { workspace = true, features = ["serde"] }
 flate2.workspace = true
 futures.workspace = true
-hexpm = { path = "../hexpm", package = "geam-gleam-hexpm", version = "=1.18.1-geam.1" }
-pretty-arena = { path = "../pretty-arena", package = "geam-gleam-pretty-arena", version = "=1.18.1-geam.1" }
-erlang-generation = { path = "../erlang-generation", package = "geam-gleam-erlang-generation", version = "=1.18.1-geam.1" }
+hexpm = { path = "../hexpm", package = "geam-gleam-hexpm", version = "=1.18.1-geam.2" }
+pretty-arena = { path = "../pretty-arena", package = "geam-gleam-pretty-arena", version = "=1.18.1-geam.2" }
+erlang-generation = { path = "../erlang-generation", package = "geam-gleam-erlang-generation", version = "=1.18.1-geam.2" }
 http.workspace = true
 im.workspace = true
 itertools.workspace = true

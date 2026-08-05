@@ -4,7 +4,7 @@
 [package]
 name = "geam-gleam-erlang-generation"
 authors = ["Louis Pilfold <louis@lpil.uk>"]
-version = "1.18.1-geam.1"
+version = "1.18.1-geam.2"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/panarch/gleam"
@@ -14,7 +14,7 @@ publish = ["crates-io"]
 
 [dependencies]
 # Encoding values in the erlang term format
-erlang-term-format = { path = "../erlang-term-format", package = "geam-gleam-erlang-term-format", version = "=1.18.1-geam.1" }
+erlang-term-format = { path = "../erlang-term-format", package = "geam-gleam-erlang-term-format", version = "=1.18.1-geam.2" }
 itertools.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
