@@ -91,7 +91,29 @@ jobs:
           } > "$notes"
 
           if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json" 2>/dev/null; then
-            test "$(jq -r .isDraft "$RUNNER_TEMP/release.json")" = true
+            if [[ "$(jq -r .isDraft "$RUNNER_TEMP/release.json")" == false ]]; then
+              echo "Published release already exists: $RELEASE_TAG"
+              exit 0
+            fi
+
+            while IFS= read -r package; do
+              url="https://static.crates.io/crates/$package/$package-$PACKAGE_VERSION.crate"
+              status="$(curl --silent --show-error --location \
+                --output /dev/null --write-out '%{http_code}' "$url")"
+              case "$status" in
+                200)
+                  echo "$package@$PACKAGE_VERSION is already published; leaving the draft frozen"
+                  exit 0
+                  ;;
+                404)
+                  ;;
+                *)
+                  echo "Unexpected crates.io response for $package: HTTP $status" >&2
+                  exit 1
+                  ;;
+              esac
+            done < <(jq -r '.packages[].name' .geam/target/package/geam-verification.json)
+
             gh release edit "$RELEASE_TAG" \
               --draft \
               --title "Gleam $UPSTREAM_TAG for Geam ($PACKAGE_VERSION)" \
