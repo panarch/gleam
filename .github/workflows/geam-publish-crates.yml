@@ -1,0 +1,338 @@
+name: "Geam: Publish compiler crates"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Exact prepared Geam release tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geam-crates-io-publish
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  publish:
+    name: verified crates to crates.io
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: crates-io
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Require the release branch
+        env:
+          SELECTED_REF: ${{ github.ref }}
+        run: test "$SELECTED_REF" = refs/heads/geam-release
+
+      - name: Resolve prepared release
+        id: prepared
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_json="$RUNNER_TEMP/geam-release.json"
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease,targetCommitish > "$release_json"
+          if [[ "$(jq -r .isDraft "$release_json")" == false ]]; then
+            test "$(jq -r .isPrerelease "$release_json")" = true
+          fi
+          commit="$(jq -r .targetCommitish "$release_json")"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]]
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "is_draft=$(jq -r .isDraft "$release_json")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout prepared release commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ steps.prepared.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: geam-packaging-publish
+          workspaces: |
+            . -> target
+            .geam/tool -> target
+
+      - name: Verify release identity and draft assets
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$(cargo run --manifest-path .geam/tool/Cargo.toml --locked --quiet -- metadata)"
+          while IFS='=' read -r key value; do
+            case "$key" in
+              upstream_tag|upstream_commit|package_version|release_tag)
+                echo "$key=$value" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          done <<< "$metadata"
+
+          release_tag="$(awk -F= '$1 == "release_tag" { print $2 }' <<< "$metadata")"
+          package_version="$(awk -F= '$1 == "package_version" { print $2 }' <<< "$metadata")"
+          test "$REQUESTED_RELEASE_TAG" = "$release_tag"
+          test "$(git rev-parse HEAD)" = "${{ steps.prepared.outputs.commit }}"
+          git fetch --no-tags origin \
+            +refs/heads/geam-release:refs/remotes/origin/geam-release
+          git merge-base --is-ancestor HEAD origin/geam-release
+
+          asset_dir="$RUNNER_TEMP/geam-release-assets"
+          mkdir -p "$asset_dir"
+          gh release download "$release_tag" --dir "$asset_dir"
+          manifest="$asset_dir/geam-verification.json"
+          test -f "$manifest"
+          test "$(jq -r .upstream_tag "$manifest")" = "$(awk -F= '$1 == "upstream_tag" { print $2 }' <<< "$metadata")"
+          test "$(jq -r .upstream_commit "$manifest")" = "$(awk -F= '$1 == "upstream_commit" { print $2 }' <<< "$metadata")"
+          test "$(jq -r .mirror_commit "$manifest")" = "${{ steps.prepared.outputs.commit }}"
+          test "$(jq -r .package_version "$manifest")" = "$package_version"
+          test "$(jq -r .geam_commit "$manifest")" != null
+          jq -e '
+            .packages | map(.name) == [
+              "geam-gleam-erlang-term-format",
+              "geam-gleam-erlang-generation",
+              "geam-gleam-pretty-arena",
+              "geam-gleam-hexpm",
+              "geam-gleam-core"
+            ]
+          ' "$manifest" > /dev/null
+
+          while IFS=$'\t' read -r name file expected_sha expected_size; do
+            asset="$asset_dir/$(basename "$file")"
+            test -f "$asset"
+            test "$(sha256sum "$asset" | awk '{ print $1 }')" = "$expected_sha"
+            test "$(stat --format=%s "$asset")" = "$expected_size"
+            test "$(basename "$file")" = "$name-$package_version.crate"
+          done < <(jq -r '.packages[] | [.name, .file, .sha256, .size] | @tsv' "$manifest")
+
+          echo "asset_dir=$asset_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Recheck the packaging overlay
+        run: |
+          cargo fmt --manifest-path .geam/tool/Cargo.toml -- --check
+          cargo test --manifest-path .geam/tool/Cargo.toml --locked
+          cargo clippy --manifest-path .geam/tool/Cargo.toml --all-targets --locked -- -D warnings
+          cargo run --manifest-path .geam/tool/Cargo.toml --locked -- verify
+
+      - name: Authenticate to crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      - name: Publish or reconcile exact crate archives
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
+          ASSET_DIR: ${{ steps.release.outputs.asset_dir }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.package_version }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_COMMIT: ${{ steps.prepared.outputs.commit }}
+          RELEASE_IS_DRAFT: ${{ steps.prepared.outputs.is_draft }}
+          UPSTREAM_COMMIT: ${{ steps.release.outputs.upstream_commit }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.upstream_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="$ASSET_DIR/geam-verification.json"
+          publish_target="$RUNNER_TEMP/geam-publish-target"
+          extract_root="$RUNNER_TEMP/geam-publish-extracted"
+          registry_root="$RUNNER_TEMP/geam-published-crates"
+          mkdir -p "$publish_target" "$extract_root" "$registry_root"
+
+          archive_sha() {
+            sha256sum "$1" | awk '{ print $1 }'
+          }
+
+          download_registry_archive() {
+            local name="$1"
+            local destination="$2"
+            local url="https://static.crates.io/crates/$name/$name-$PACKAGE_VERSION.crate"
+            local temporary="$destination.partial"
+            local status
+            if ! status="$(curl --silent --show-error --location \
+              --output "$temporary" --write-out '%{http_code}' "$url")"; then
+              rm -f "$temporary"
+              return 2
+            fi
+            case "$status" in
+              200)
+                mv "$temporary" "$destination"
+                return 0
+                ;;
+              404)
+                rm -f "$temporary"
+                return 1
+                ;;
+              *)
+                rm -f "$temporary"
+                echo "Unexpected crates.io response for $name: HTTP $status" >&2
+                return 2
+                ;;
+            esac
+          }
+
+          wait_for_registry() {
+            local name="$1"
+            local candidate_sha="$2"
+            local registry="$registry_root/$name-$PACKAGE_VERSION.crate"
+            local attempt
+            for attempt in $(seq 1 60); do
+              if download_registry_archive "$name" "$registry"; then
+                test "$(archive_sha "$registry")" = "$candidate_sha"
+                if cargo info "$name@$PACKAGE_VERSION" --registry crates-io > /dev/null 2>&1; then
+                  return 0
+                fi
+              fi
+              echo "Waiting for $name@$PACKAGE_VERSION in crates.io ($attempt/60)"
+              sleep 10
+            done
+            echo "Timed out waiting for $name@$PACKAGE_VERSION in crates.io" >&2
+            return 1
+          }
+
+          prepare_candidate() {
+            local name="$1"
+            local candidate="$publish_target/package/$name-$PACKAGE_VERSION.crate"
+            local candidate_dir="$extract_root/$name-candidate"
+            local draft="$ASSET_DIR/$name-$PACKAGE_VERSION.crate"
+            local draft_dir="$extract_root/$name-draft"
+            local candidate_manifest
+
+            rm -f "$candidate"
+            cargo package \
+              --package "$name" \
+              --registry crates-io \
+              --locked \
+              --no-verify \
+              --target-dir "$publish_target"
+            test -f "$candidate"
+
+            rm -rf "$candidate_dir" "$draft_dir"
+            mkdir -p "$candidate_dir" "$draft_dir"
+            tar -xzf "$candidate" --directory "$candidate_dir"
+            tar -xzf "$draft" --directory "$draft_dir"
+            candidate_manifest="$(find "$candidate_dir" -mindepth 2 -maxdepth 2 -name Cargo.toml -print -quit)"
+            test -n "$candidate_manifest"
+            cargo metadata \
+              --manifest-path "$candidate_manifest" \
+              --locked \
+              --format-version 1 > /dev/null
+
+            if [[ "$(archive_sha "$candidate")" != "$(archive_sha "$draft")" ]]; then
+              diff --recursive --unified --exclude Cargo.lock "$draft_dir" "$candidate_dir"
+            fi
+            CANDIDATE="$candidate"
+          }
+
+          stage_candidate() {
+            local name="$1"
+            local candidate="$2"
+            local candidate_sha candidate_size recorded_sha temporary
+            candidate_sha="$(archive_sha "$candidate")"
+            candidate_size="$(stat --format=%s "$candidate")"
+            recorded_sha="$(jq -r --arg name "$name" \
+              '.packages[] | select(.name == $name) | .sha256' "$manifest")"
+            if [[ "$recorded_sha" == "$candidate_sha" ]]; then
+              return 0
+            fi
+            test "$RELEASE_IS_DRAFT" = true
+
+            temporary="$manifest.updated"
+            jq \
+              --arg name "$name" \
+              --arg sha "$candidate_sha" \
+              --argjson size "$candidate_size" \
+              '(.packages[] | select(.name == $name)) |= (.sha256 = $sha | .size = $size)' \
+              "$manifest" > "$temporary"
+            mv "$temporary" "$manifest"
+            cp "$candidate" "$ASSET_DIR/$name-$PACKAGE_VERSION.crate"
+            gh release upload "$RELEASE_TAG" \
+              "$ASSET_DIR/$name-$PACKAGE_VERSION.crate" \
+              "$manifest" \
+              --clobber
+          }
+
+          publish_or_reconcile() {
+            local name="$1"
+            local registry="$registry_root/$name-$PACKAGE_VERSION.crate"
+            local candidate_sha download_status
+            prepare_candidate "$name"
+            candidate_sha="$(archive_sha "$CANDIDATE")"
+
+            if download_registry_archive "$name" "$registry"; then
+              test "$(archive_sha "$registry")" = "$candidate_sha"
+              stage_candidate "$name" "$CANDIDATE"
+              cargo info "$name@$PACKAGE_VERSION" --registry crates-io > /dev/null
+              echo "$name@$PACKAGE_VERSION is already published with the exact archive"
+              return 0
+            else
+              download_status=$?
+              test "$download_status" = 1
+            fi
+
+            stage_candidate "$name" "$CANDIDATE"
+            cargo publish \
+              --package "$name" \
+              --registry crates-io \
+              --locked \
+              --no-verify \
+              --target-dir "$publish_target"
+            test "$(archive_sha "$CANDIDATE")" = "$candidate_sha"
+            wait_for_registry "$name" "$candidate_sha"
+          }
+
+          publish_or_reconcile geam-gleam-erlang-term-format
+          publish_or_reconcile geam-gleam-pretty-arena
+          publish_or_reconcile geam-gleam-hexpm
+          publish_or_reconcile geam-gleam-erlang-generation
+          publish_or_reconcile geam-gleam-core
+
+          notes="$RUNNER_TEMP/geam-release-notes.md"
+          {
+            echo "Packages the Gleam $UPSTREAM_TAG compiler components for Geam."
+            echo
+            echo "- Upstream commit: \`$UPSTREAM_COMMIT\`"
+            echo "- Packaging version: \`$PACKAGE_VERSION\`"
+            echo "- Published mirror commit: \`$RELEASE_COMMIT\`"
+            echo "- Verified Geam commit: \`$(jq -r .geam_commit "$manifest")\`"
+            echo
+            echo "## crates.io"
+            jq -r --arg version "$PACKAGE_VERSION" \
+              '.packages[] | "- [`\(.name)`](https://crates.io/crates/\(.name)/\($version))"' \
+              "$manifest"
+            echo
+            echo "## Exact archives"
+            jq -r '.packages[] | "- `\(.name)`: `\(.sha256)` (\(.size) bytes)"' "$manifest"
+          } > "$notes"
+
+          is_draft="$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)"
+          if [[ "$is_draft" == true ]]; then
+            gh release edit "$RELEASE_TAG" \
+              --draft=false \
+              --prerelease \
+              --notes-file "$notes" \
+              --target "$RELEASE_COMMIT"
+          fi
+
+      - name: Check patch formatting
+        run: git diff --check

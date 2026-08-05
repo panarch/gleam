@@ -33,19 +33,36 @@ upstream release tag
 -> geam-release
 -> geam-verify-packaging workflow
 -> draft GitHub release
+-> approved geam-publish-crates workflow
+-> crates.io and GitHub prerelease
 ```
 
-Publishing to crates.io is deliberately not part of this initial setup. The
-draft release is the final reversible boundary before bootstrap publishing and
-crates.io Trusted Publishing are configured.
+The draft release is the final reversible boundary before publication. The
+manual publish workflow runs in the protected `crates-io` environment and uses
+crates.io Trusted Publishing to obtain a short-lived token. No registry token
+is stored in GitHub.
+
+Packages are published in dependency order. Cargo can only generate the final
+registry-shaped lockfile for a dependent package after its mirrored dependency
+is visible in the crates.io index, so the workflow compares regenerated
+archives with the reviewed draft and permits only `Cargo.lock` to differ. It
+then replaces the draft asset with the exact archive sent to crates.io. A retry
+skips an existing version only when its registry archive is byte-for-byte
+identical.
+
+Once any package in a version is visible on crates.io, draft preparation leaves
+that release untouched. The publish workflow always checks out the immutable
+commit recorded by the prepared release rather than repackaging a newer branch
+commit under the same version.
 
 ## Workflows
 
 | Workflow | Trigger | Responsibility |
 | --- | --- | --- |
 | `Geam: Sync upstream release` | Daily schedule or manual dispatch | Select a stable upstream release tag, merge it into a sync branch, regenerate the overlay, verify packages, and open a PR to `geam-release`. |
-| `Geam: Verify packaging` | PR, `geam-release` push, weekly schedule, or manual dispatch | Test the overlay and mirrored crates, build exact `.crate` files, and run current Geam tests and Clippy against those archives. |
+| `Geam: Verify packaging` | PR, `geam-release` push, weekly schedule, or manual dispatch | Test the overlay and mirrored crates, build reviewed `.crate` candidates, and run current Geam tests and Clippy against those archives. |
 | `Geam: Prepare draft release` | Successful packaging verification on `geam-release` | Attach the verified archives and checksums to a draft GitHub Release. |
+| `Geam: Publish compiler crates` | Manual dispatch from `geam-release` | Reconcile the exact release archives, publish in dependency order through Trusted Publishing, and publish the GitHub prerelease. |
 
 The fork must enable GitHub's **Allow GitHub Actions to create and approve pull
 requests** repository option for the sync workflow to open its PR. The workflow
@@ -54,6 +71,23 @@ approve or merge it. Default workflow permissions remain read-only.
 
 Upstream release, container, and nightly-release workflows are removed by the
 overlay generator. Upstream CI remains available for source compatibility.
+
+## Trusted Publishing
+
+The repository has a protected GitHub environment named `crates-io`. Each of
+the five published packages configures the same crates.io Trusted Publisher:
+
+```text
+owner: panarch
+repository: gleam
+workflow: geam-publish-crates.yml
+environment: crates-io
+```
+
+The configuration is registered separately for each package because
+authorization belongs to the crates.io package, while one workflow publishes
+the complete dependency graph. Dispatch requires the exact prepared release
+tag and is accepted only from `geam-release`.
 
 ## Updating a release
 
@@ -85,7 +119,7 @@ cargo run --manifest-path .geam/tool/Cargo.toml -- package
 cargo run --manifest-path .geam/tool/Cargo.toml -- verify-consumer --geam ../geam
 ```
 
-`verify-consumer` extracts the exact `.crate` archives, rewrites a clean Geam
+`verify-consumer` extracts the reviewed `.crate` candidates, rewrites a clean Geam
 checkout to use registry-shaped exact dependencies, and supplies only those
 archives through local Cargo patches. It then runs Geam tests and Clippy and
 records both repository commits and every package SHA-256 in
