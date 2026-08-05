@@ -75,7 +75,17 @@ jobs:
           GEAM_REPOSITORY: https://github.com/panarch/geam.git
         run: git clone --depth 1 "$GEAM_REPOSITORY" "$RUNNER_TEMP/geam"
 
+      - name: Install Geam consumer Rust
+        id: geam-rust
+        run: |
+          toolchain="$(sed -n 's/^channel = "\([^"]*\)"$/\1/p' "$RUNNER_TEMP/geam/rust-toolchain.toml")"
+          test -n "$toolchain"
+          rustup toolchain install "$toolchain" --profile minimal --component clippy
+          echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
+
       - name: Verify packaged Geam consumer
+        env:
+          RUSTUP_TOOLCHAIN: ${{ steps.geam-rust.outputs.toolchain }}
         run: >-
           cargo run --manifest-path .geam/tool/Cargo.toml --locked --
           verify-consumer
