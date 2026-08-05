@@ -97,8 +97,9 @@ jobs:
             fi
 
             while IFS= read -r package; do
-              url="https://static.crates.io/crates/$package/$package-$PACKAGE_VERSION.crate"
+              url="https://crates.io/api/v1/crates/$package/$PACKAGE_VERSION"
               status="$(curl --silent --show-error --location \
+                --user-agent "geam-release-workflow ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY)" \
                 --output /dev/null --write-out '%{http_code}' "$url")"
               case "$status" in
                 200)
@@ -108,7 +109,7 @@ jobs:
                 404)
                   ;;
                 *)
-                  echo "Unexpected crates.io response for $package: HTTP $status" >&2
+                  echo "Unexpected crates.io metadata response for $package@$PACKAGE_VERSION: HTTP $status" >&2
                   exit 1
                   ;;
               esac
