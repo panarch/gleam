@@ -2,17 +2,24 @@
 # SPDX-FileCopyrightText: 2026 The Gleam contributors
 
 [package]
-name = "erlang-generation"
+name = "geam-gleam-erlang-generation"
 authors = ["Louis Pilfold <louis@lpil.uk>"]
-version = "1.0.0"
+version = "1.18.1-geam.1"
 edition = "2024"
 license = "Apache-2.0"
+repository = "https://github.com/panarch/gleam"
+description = "Gleam's Erlang code generator, packaged for Geam"
+readme = "README.geam.md"
+publish = ["crates-io"]
 
 [dependencies]
 # Encoding values in the erlang term format
-erlang-term-format = { path = "../erlang-term-format" }
+erlang-term-format = { path = "../erlang-term-format", package = "geam-gleam-erlang-term-format", version = "=1.18.1-geam.1" }
 itertools.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
 regex.workspace = true
 ecow.workspace = true
+
+[lib]
+name = "erlang_generation"

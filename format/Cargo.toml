@@ -9,8 +9,8 @@ edition = "2024"
 license = "Apache-2.0"
 
 [dependencies]
-gleam-core = { path = "../compiler-core" }
-pretty-arena = { path = "../pretty-arena" }
+gleam-core = { path = "../compiler-core", package = "geam-gleam-core" }
+pretty-arena = { path = "../pretty-arena", package = "geam-gleam-pretty-arena" }
 itertools.workspace = true
 vec1.workspace = true
 camino.workspace = true

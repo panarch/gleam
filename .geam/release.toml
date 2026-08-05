@@ -1,0 +1,44 @@
+upstream_repository = "gleam-lang/gleam"
+upstream_tag = "v1.18.1"
+upstream_commit = "4a83802ca33a8a96227a1b332768725f232f9779"
+revision = 1
+repository = "https://github.com/panarch/gleam"
+
+[[dependency_pins]]
+name = "ecow"
+version = "=0.2.6"
+
+[[packages]]
+path = "erlang-term-format"
+source_name = "erlang-term-format"
+published_name = "geam-gleam-erlang-term-format"
+crate_name = "erlang_term_format"
+description = "Gleam's Erlang term formatter, packaged for Geam"
+
+[[packages]]
+path = "erlang-generation"
+source_name = "erlang-generation"
+published_name = "geam-gleam-erlang-generation"
+crate_name = "erlang_generation"
+description = "Gleam's Erlang code generator, packaged for Geam"
+
+[[packages]]
+path = "pretty-arena"
+source_name = "pretty-arena"
+published_name = "geam-gleam-pretty-arena"
+crate_name = "pretty_arena"
+description = "Gleam's document arena, packaged for Geam"
+
+[[packages]]
+path = "hexpm"
+source_name = "hexpm"
+published_name = "geam-gleam-hexpm"
+crate_name = "hexpm"
+description = "Gleam's Hex client, packaged for Geam"
+
+[[packages]]
+path = "compiler-core"
+source_name = "gleam-core"
+published_name = "geam-gleam-core"
+crate_name = "gleam_core"
+description = "The Gleam compiler core, packaged for Geam"

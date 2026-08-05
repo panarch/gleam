@@ -1,0 +1,106 @@
+name: "Geam: Verify packaging"
+
+on:
+  schedule:
+    - cron: "43 4 * * 1"
+  pull_request:
+    branches: [geam-release]
+  push:
+    branches: [geam-release]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: geam-packaging-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  verify:
+    name: packages and Geam consumer
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout mirror
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: geam-packaging
+          workspaces: |
+            . -> target
+            .geam/tool -> target
+
+      - name: Verify packaging tool
+        run: |
+          cargo fmt --manifest-path .geam/tool/Cargo.toml -- --check
+          cargo test --manifest-path .geam/tool/Cargo.toml --locked
+          cargo clippy --manifest-path .geam/tool/Cargo.toml --all-targets --locked -- -D warnings
+
+      - name: Verify canonical overlay
+        run: cargo run --manifest-path .geam/tool/Cargo.toml --locked -- verify
+
+      - name: Test mirrored packages
+        run: |
+          cargo test --locked --quiet \
+            -p geam-gleam-erlang-term-format \
+            -p geam-gleam-erlang-generation \
+            -p geam-gleam-pretty-arena \
+            -p geam-gleam-hexpm \
+            -p geam-gleam-core
+          cargo clippy --locked \
+            -p geam-gleam-erlang-term-format \
+            -p geam-gleam-erlang-generation \
+            -p geam-gleam-pretty-arena \
+            -p geam-gleam-hexpm \
+            -p geam-gleam-core \
+            -- -D warnings
+
+      - name: Checkout current Geam consumer
+        env:
+          GEAM_REPOSITORY: https://github.com/panarch/geam.git
+        run: git clone --depth 1 "$GEAM_REPOSITORY" "$RUNNER_TEMP/geam"
+
+      - name: Install Geam consumer Rust
+        id: geam-rust
+        run: |
+          toolchain="$(sed -n 's/^channel = "\([^"]*\)"$/\1/p' "$RUNNER_TEMP/geam/rust-toolchain.toml")"
+          test -n "$toolchain"
+          rustup toolchain install "$toolchain" --profile minimal --component clippy
+          echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
+
+      - name: Verify packaged Geam consumer
+        env:
+          RUSTUP_TOOLCHAIN: ${{ steps.geam-rust.outputs.toolchain }}
+        run: >-
+          cargo run --manifest-path .geam/tool/Cargo.toml --locked --
+          verify-consumer
+          --geam "$RUNNER_TEMP/geam"
+          --target-dir "$RUNNER_TEMP/geam-target"
+
+      - name: Check patch formatting
+        run: git diff --check
+
+      - name: Upload verified packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: geam-packages-${{ github.sha }}
+          path: |
+            .geam/target/package/*.crate
+            .geam/target/package/geam-verification.json
+          if-no-files-found: error
+          retention-days: 14

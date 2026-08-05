@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 [dependencies]
 # The pure compiler
-gleam-core = { path = "../compiler-core" }
+gleam-core = { path = "../compiler-core", package = "geam-gleam-core" }
 # The gleam formatter
 gleam-format = { path = "../format" }
 # The language server
@@ -51,7 +51,7 @@ debug-ignore.workspace = true
 ecow.workspace = true
 flate2.workspace = true
 futures.workspace = true
-hexpm = { path = "../hexpm" }
+hexpm = { path = "../hexpm", package = "geam-gleam-hexpm" }
 http-serde.workspace = true
 http.workspace = true
 ignore.workspace = true

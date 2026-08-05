@@ -2,11 +2,15 @@
 # SPDX-FileCopyrightText: 2026 The Gleam contributors
 
 [package]
-name = "erlang-term-format"
+name = "geam-gleam-erlang-term-format"
 authors = ["Louis Pilfold <louis@lpil.uk>"]
-version = "1.0.0"
+version = "1.18.1-geam.1"
 edition = "2024"
 license = "Apache-2.0"
+repository = "https://github.com/panarch/gleam"
+description = "Gleam's Erlang term formatter, packaged for Geam"
+readme = "README.geam.md"
+publish = ["crates-io"]
 
 [dependencies]
 num-bigint.workspace = true
@@ -14,3 +18,6 @@ num-traits.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+
+[lib]
+name = "erlang_term_format"

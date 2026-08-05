@@ -2,11 +2,15 @@
 # SPDX-FileCopyrightText: 2026 The Gleam contributors
 
 [package]
-name = "pretty-arena"
-version = "1.0.0"
+name = "geam-gleam-pretty-arena"
+version = "1.18.1-geam.1"
 authors = ["Louis Pilfold <louis@lpil.uk>", "Giacomo Cavalieri <info@giacomocavalieri.me>"]
 edition = "2024"
 license = "Apache-2.0"
+repository = "https://github.com/panarch/gleam"
+description = "Gleam's document arena, packaged for Geam"
+readme = "README.geam.md"
+publish = ["crates-io"]
 
 [dependencies]
 # Reference based memory arena
@@ -16,3 +20,6 @@ unicode-segmentation.workspace = true
 ecow.workspace = true
 num-bigint.workspace = true
 im.workspace = true
+
+[lib]
+name = "pretty_arena"
