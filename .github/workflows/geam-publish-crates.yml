@@ -163,6 +163,29 @@ jobs:
             sha256sum "$1" | awk '{ print $1 }'
           }
 
+          registry_version_exists() {
+            local name="$1"
+            local url="https://crates.io/api/v1/crates/$name/$PACKAGE_VERSION"
+            local status
+            if ! status="$(curl --silent --show-error --location \
+              --user-agent "geam-release-workflow ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY)" \
+              --output /dev/null --write-out '%{http_code}' "$url")"; then
+              return 2
+            fi
+            case "$status" in
+              200)
+                return 0
+                ;;
+              404)
+                return 1
+                ;;
+              *)
+                echo "Unexpected crates.io metadata response for $name@$PACKAGE_VERSION: HTTP $status" >&2
+                return 2
+                ;;
+            esac
+          }
+
           download_registry_archive() {
             local name="$1"
             local destination="$2"
@@ -179,13 +202,13 @@ jobs:
                 mv "$temporary" "$destination"
                 return 0
                 ;;
-              404)
+              403|404)
                 rm -f "$temporary"
                 return 1
                 ;;
               *)
                 rm -f "$temporary"
-                echo "Unexpected crates.io response for $name: HTTP $status" >&2
+                echo "Unexpected crates.io archive response for $name@$PACKAGE_VERSION: HTTP $status" >&2
                 return 2
                 ;;
             esac
@@ -195,12 +218,24 @@ jobs:
             local name="$1"
             local candidate_sha="$2"
             local registry="$registry_root/$name-$PACKAGE_VERSION.crate"
-            local attempt
+            local attempt archive_status version_status
             for attempt in $(seq 1 60); do
-              if download_registry_archive "$name" "$registry"; then
-                test "$(archive_sha "$registry")" = "$candidate_sha"
-                if cargo info "$name@$PACKAGE_VERSION" --registry crates-io > /dev/null 2>&1; then
-                  return 0
+              if registry_version_exists "$name"; then
+                if download_registry_archive "$name" "$registry"; then
+                  test "$(archive_sha "$registry")" = "$candidate_sha"
+                  if cargo info "$name@$PACKAGE_VERSION" --registry crates-io > /dev/null 2>&1; then
+                    return 0
+                  fi
+                else
+                  archive_status=$?
+                  if [[ "$archive_status" != 1 ]]; then
+                    return "$archive_status"
+                  fi
+                fi
+              else
+                version_status=$?
+                if [[ "$version_status" != 1 ]]; then
+                  return "$version_status"
                 fi
               fi
               echo "Waiting for $name@$PACKAGE_VERSION in crates.io ($attempt/60)"
@@ -274,20 +309,20 @@ jobs:
 
           publish_or_reconcile() {
             local name="$1"
-            local registry="$registry_root/$name-$PACKAGE_VERSION.crate"
-            local candidate_sha download_status
+            local candidate_sha version_status
             prepare_candidate "$name"
             candidate_sha="$(archive_sha "$CANDIDATE")"
 
-            if download_registry_archive "$name" "$registry"; then
-              test "$(archive_sha "$registry")" = "$candidate_sha"
+            if registry_version_exists "$name"; then
+              wait_for_registry "$name" "$candidate_sha"
               stage_candidate "$name" "$CANDIDATE"
-              cargo info "$name@$PACKAGE_VERSION" --registry crates-io > /dev/null
               echo "$name@$PACKAGE_VERSION is already published with the exact archive"
               return 0
             else
-              download_status=$?
-              test "$download_status" = 1
+              version_status=$?
+              if [[ "$version_status" != 1 ]]; then
+                return "$version_status"
+              fi
             fi
 
             stage_candidate "$name" "$CANDIDATE"
