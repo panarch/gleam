@@ -61,7 +61,7 @@ base16 = "0"
 lsp-server = "0"
 lsp-types = { package = "gen-lsp-types", version = "0.5.0", features = ["url"] }
 # Compact clone-on-write vector & string type
-ecow = "0"
+ecow = "=0.2.6"
 # Drop in replacement for std::path but with only utf-8
 camino = "1"
 # std::error::Error definition macro

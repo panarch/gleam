@@ -993,7 +993,7 @@ pub struct Dependency {
     pub repository: Option<String>,
 }
 
-static USER_AGENT: &str = concat!("Gleam v", env!("CARGO_PKG_VERSION"));
+static USER_AGENT: &str = "Gleam v1.18.1";
 
 static PACKAGE_PATTERN: OnceLock<Regex> = OnceLock::new();
 static VERSION_PATTERN: OnceLock<Regex> = OnceLock::new();

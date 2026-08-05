@@ -1,0 +1,194 @@
+name: "Geam: Sync upstream release"
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Upstream stable release tag; empty selects the latest release
+        required: false
+        type: string
+      revision:
+        description: Geam packaging revision
+        required: true
+        default: "1"
+        type: string
+      dry_run:
+        description: Build and verify without pushing a branch or opening a PR
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: geam-upstream-sync
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  sync:
+    name: release tag to sync PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout geam-release
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: geam-release
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: geam-packaging-sync
+          workspaces: .geam/tool -> target
+
+      - name: Select immutable upstream release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag || '' }}
+          REQUESTED_REVISION: ${{ inputs.revision || '1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$(cargo run --manifest-path .geam/tool/Cargo.toml --locked --quiet -- metadata)"
+          upstream_repository="$(awk -F= '$1 == "upstream_repository" { print $2 }' <<< "$metadata")"
+          tag="$REQUESTED_TAG"
+          if [[ -z "$tag" ]]; then
+            tag="$(gh api "repos/$upstream_repository/releases/latest" --jq .tag_name)"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a stable vMAJOR.MINOR.PATCH tag, found: $tag" >&2
+            exit 1
+          fi
+          if [[ ! "$REQUESTED_REVISION" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Expected a positive packaging revision, found: $REQUESTED_REVISION" >&2
+            exit 1
+          fi
+
+          git remote add upstream "https://github.com/$upstream_repository.git" 2>/dev/null || true
+          git fetch --force --tags upstream "$tag"
+          commit="$(git rev-parse "${tag}^{commit}")"
+          current_tag="$(awk -F= '$1 == "upstream_tag" { print $2 }' <<< "$metadata")"
+          current_commit="$(awk -F= '$1 == "upstream_commit" { print $2 }' <<< "$metadata")"
+          current_revision="$(awk -F= '$1 == "revision" { print $2 }' <<< "$metadata")"
+          current_package_version="$(awk -F= '$1 == "package_version" { print $2 }' <<< "$metadata")"
+          requested_package_version="${tag#v}-geam.${REQUESTED_REVISION}"
+          branch="geam-sync-${tag#v}-geam-${REQUESTED_REVISION}"
+
+          if [[ "$tag" == "$current_tag" && "$commit" != "$current_commit" ]]; then
+            echo "Recorded immutable tag $tag moved from $current_commit to $commit" >&2
+            exit 1
+          fi
+          if [[ "$tag" == "$current_tag" ]] && (( REQUESTED_REVISION < current_revision )); then
+            echo "Packaging revision cannot move backward from $current_revision to $REQUESTED_REVISION" >&2
+            exit 1
+          fi
+          if [[ "$tag" != "$current_tag" ]] && ! git merge-base --is-ancestor "$current_commit" "$commit"; then
+            echo "Upstream release $tag does not descend from recorded commit $current_commit" >&2
+            exit 1
+          fi
+          if [[ "$requested_package_version" == "$current_package_version" ]]; then
+            echo "Geam packaging already follows $tag at revision $REQUESTED_REVISION"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Sync branch already exists: $branch"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "revision=$REQUESTED_REVISION" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Merge tag and regenerate packaging overlay
+        if: steps.release.outputs.changed == 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          COMMIT: ${{ steps.release.outputs.commit }}
+          REVISION: ${{ steps.release.outputs.revision }}
+          BRANCH: ${{ steps.release.outputs.branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch -c "$BRANCH"
+          if ! git merge --no-commit --no-ff "$TAG"; then
+            while IFS= read -r path; do
+              case "$path" in
+                Cargo.toml|Cargo.lock|*/Cargo.toml|compiler-core/src/version.rs|hexpm/src/lib.rs|.github/workflows/release.yaml|.github/workflows/release-containers.yaml|.github/workflows/release-nightly.yaml)
+                  git checkout --theirs -- "$path"
+                  git add "$path"
+                  ;;
+                *)
+                  echo "Unrecognized upstream conflict: $path" >&2
+                  exit 1
+                  ;;
+              esac
+            done < <(git diff --name-only --diff-filter=U)
+          fi
+
+          cargo run --manifest-path .geam/tool/Cargo.toml --locked -- \
+            set-release --tag "$TAG" --commit "$COMMIT" --revision "$REVISION"
+          cargo metadata --format-version 1 > /dev/null
+          git add -A
+          git commit -m "Sync Gleam $TAG for Geam packaging"
+
+      - name: Verify generated sync commit
+        if: steps.release.outputs.changed == 'true'
+        run: |
+          cargo fmt --manifest-path .geam/tool/Cargo.toml -- --check
+          cargo test --manifest-path .geam/tool/Cargo.toml --locked
+          cargo clippy --manifest-path .geam/tool/Cargo.toml --all-targets --locked -- -D warnings
+          cargo run --manifest-path .geam/tool/Cargo.toml --locked -- verify
+          cargo run --manifest-path .geam/tool/Cargo.toml --locked -- package
+          git diff --check HEAD^
+
+      - name: Push sync branch
+        if: steps.release.outputs.changed == 'true' && inputs.dry_run != true
+        env:
+          BRANCH: ${{ steps.release.outputs.branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          git push --set-upstream origin "$BRANCH"
+
+      - name: Open sync pull request
+        if: steps.release.outputs.changed == 'true' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          COMMIT: ${{ steps.release.outputs.commit }}
+          REVISION: ${{ steps.release.outputs.revision }}
+          BRANCH: ${{ steps.release.outputs.branch }}
+        shell: bash
+        run: |
+          body="$(printf '%s\n\n%s\n%s\n%s\n' \
+            'Sync the Geam packaging overlay to an immutable Gleam release tag.' \
+            "- Upstream tag: \`$TAG\`" \
+            "- Upstream commit: \`$COMMIT\`" \
+            "- Packaging revision: \`$REVISION\`")"
+          gh pr create \
+            --base geam-release \
+            --head "$BRANCH" \
+            --title "Sync Gleam $TAG for Geam packaging" \
+            --body "$body"

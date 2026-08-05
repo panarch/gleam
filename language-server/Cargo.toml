@@ -9,13 +9,13 @@ edition = "2024"
 license = "Apache-2.0"
 
 [dependencies]
-gleam-core = { path = "../compiler-core" }
+gleam-core = { path = "../compiler-core", package = "geam-gleam-core" }
 gleam-format = { path = "../format" }
 
 camino.workspace = true
 debug-ignore.workspace = true
 ecow.workspace = true
-hexpm = { path = "../hexpm" }
+hexpm = { path = "../hexpm", package = "geam-gleam-hexpm" }
 im.workspace = true
 itertools.workspace = true
 lsp-server.workspace = true

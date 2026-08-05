@@ -1,0 +1,112 @@
+name: "Geam: Prepare draft release"
+
+on:
+  workflow_run:
+    workflows: ["Geam: Verify packaging"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: geam-draft-release
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: verified package draft
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'geam-release' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout verified commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download verified packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: geam-packages-${{ github.event.workflow_run.head_sha }}
+          path: .geam/target/package
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+
+      - name: Read release identity
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata="$(cargo run --manifest-path .geam/tool/Cargo.toml --locked --quiet -- metadata)"
+          while IFS='=' read -r key value; do
+            case "$key" in
+              upstream_tag|upstream_commit|package_version|release_tag)
+                echo "$key=$value" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          done <<< "$metadata"
+          test "$(jq -r .mirror_commit .geam/target/package/geam-verification.json)" = "${{ github.event.workflow_run.head_sha }}"
+          geam_commit="$(jq -r .geam_commit .geam/target/package/geam-verification.json)"
+          test "$geam_commit" != null
+          echo "geam_commit=$geam_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.package_version }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.upstream_tag }}
+          UPSTREAM_COMMIT: ${{ steps.release.outputs.upstream_commit }}
+          VERIFIED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          GEAM_COMMIT: ${{ steps.release.outputs.geam_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/geam-release-notes.md"
+          {
+            echo "Packages the Gleam $UPSTREAM_TAG compiler components for Geam."
+            echo
+            echo "- Upstream commit: \`$UPSTREAM_COMMIT\`"
+            echo "- Packaging version: \`$PACKAGE_VERSION\`"
+            echo "- Verified mirror commit: \`$VERIFIED_COMMIT\`"
+            echo "- Verified Geam commit: \`$GEAM_COMMIT\`"
+            echo
+            echo "This is a draft packaging release. Publishing to crates.io is a separate approved action."
+            echo
+            echo "## Artifacts"
+            jq -r '.packages[] | "- `\(.name)`: `\(.sha256)` (\(.size) bytes)"' \
+              .geam/target/package/geam-verification.json
+          } > "$notes"
+
+          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json" 2>/dev/null; then
+            test "$(jq -r .isDraft "$RUNNER_TEMP/release.json")" = true
+            gh release edit "$RELEASE_TAG" \
+              --draft \
+              --title "Gleam $UPSTREAM_TAG for Geam ($PACKAGE_VERSION)" \
+              --notes-file "$notes" \
+              --target "$VERIFIED_COMMIT"
+            gh release upload "$RELEASE_TAG" \
+              .geam/target/package/*.crate \
+              .geam/target/package/geam-verification.json \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              .geam/target/package/*.crate \
+              .geam/target/package/geam-verification.json \
+              --draft \
+              --title "Gleam $UPSTREAM_TAG for Geam ($PACKAGE_VERSION)" \
+              --notes-file "$notes" \
+              --target "$VERIFIED_COMMIT"
+          fi
