@@ -50,10 +50,13 @@ then replaces the draft asset with the exact archive sent to crates.io. A retry
 skips an existing version only when its registry archive is byte-for-byte
 identical.
 
-Once any package in a version is visible on crates.io, draft preparation leaves
-that release untouched. The publish workflow always checks out the immutable
-commit recorded by the prepared release rather than repackaging a newer branch
-commit under the same version.
+The publish workflow always checks out the immutable commit recorded by the
+prepared release rather than repackaging a newer branch commit under the same
+version. If the publishing workflows change after a draft is prepared but
+before publication, wait for packaging verification to refresh the draft;
+stale workflow definitions are rejected before any crate is uploaded. Once any
+package in a version is visible on crates.io, draft preparation leaves that
+release untouched.
 
 ## Workflows
 

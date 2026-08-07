@@ -97,6 +97,11 @@ jobs:
           git fetch --no-tags origin \
             +refs/heads/geam-release:refs/remotes/origin/geam-release
           git merge-base --is-ancestor HEAD origin/geam-release
+          # GITHUB_TOKEN cannot publish a release whose target has stale workflow definitions.
+          if ! git diff --quiet HEAD origin/geam-release -- .github/workflows; then
+            echo "Prepared release predates the current publishing workflows; wait for a refreshed draft" >&2
+            exit 1
+          fi
 
           asset_dir="$RUNNER_TEMP/geam-release-assets"
           mkdir -p "$asset_dir"
