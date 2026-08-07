@@ -94,6 +94,11 @@ jobs:
             echo "Recorded immutable tag $tag moved from $current_commit to $commit" >&2
             exit 1
           fi
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" && "$tag" == "$current_tag" ]]; then
+            echo "Geam packaging already follows latest upstream release $tag at revision $current_revision"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ "$tag" == "$current_tag" ]] && (( REQUESTED_REVISION < current_revision )); then
             echo "Packaging revision cannot move backward from $current_revision to $REQUESTED_REVISION" >&2
             exit 1
