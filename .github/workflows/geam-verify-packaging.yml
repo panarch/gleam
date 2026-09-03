@@ -70,6 +70,9 @@ jobs:
             -p geam-gleam-core \
             -- -D warnings
 
+      - name: Build package artifacts
+        run: cargo run --manifest-path .geam/tool/Cargo.toml --locked -- package
+
       - name: Check patch formatting
         run: git diff --check
 
