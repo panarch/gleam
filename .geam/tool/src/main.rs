@@ -1,5 +1,4 @@
 mod config;
-mod consumer;
 mod lockfile;
 mod manifest;
 mod package;
@@ -20,7 +19,7 @@ fn main() -> Result<()> {
     let config_path = root.join(".geam/release.toml");
     let mut arguments = env::args().skip(1);
     let Some(command) = arguments.next() else {
-        bail!("expected apply, verify, set-release, metadata, package, or verify-consumer");
+        bail!("expected apply, verify, set-release, metadata, or package");
     };
 
     match command.as_str() {
@@ -74,19 +73,6 @@ fn main() -> Result<()> {
             lockfile::verify(&root, &config)?;
             package::build(&root, &config)?;
         }
-        "verify-consumer" => {
-            let geam = PathBuf::from(next_option(&mut arguments, "--geam")?);
-            let target_dir = optional_option(&mut arguments, "--target-dir")?.map(PathBuf::from);
-            expect_end(arguments)?;
-
-            let config = ReleaseConfig::load(&config_path)?;
-            repository::verify(&root, &config)?;
-            manifest::verify(&root, &config)?;
-            source::verify(&root, &config)?;
-            lockfile::verify(&root, &config)?;
-            let artifacts = package::build(&root, &config)?;
-            consumer::verify(&root, &geam, target_dir.as_deref(), &config, &artifacts)?;
-        }
         _ => bail!("unknown command: {command}"),
     }
 
@@ -102,22 +88,6 @@ fn next_option(arguments: &mut impl Iterator<Item = String>, expected: &str) -> 
     }
     arguments
         .next()
-        .with_context(|| format!("missing value for {expected}"))
-}
-
-fn optional_option(
-    arguments: &mut impl Iterator<Item = String>,
-    expected: &str,
-) -> Result<Option<String>> {
-    let Some(option) = arguments.next() else {
-        return Ok(None);
-    };
-    if option != expected {
-        bail!("expected {expected}, found {option}");
-    }
-    arguments
-        .next()
-        .map(Some)
         .with_context(|| format!("missing value for {expected}"))
 }
 

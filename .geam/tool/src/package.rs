@@ -25,7 +25,6 @@ pub struct PackageArtifacts {
     pub upstream_commit: String,
     pub mirror_commit: String,
     pub package_version: String,
-    pub geam_commit: Option<String>,
     pub packages: Vec<PackageArtifact>,
 }
 
@@ -156,7 +155,6 @@ pub fn build(root: &Path, config: &ReleaseConfig) -> Result<PackageArtifacts> {
         upstream_commit: config.upstream_commit.clone(),
         mirror_commit: git_head(root)?,
         package_version: version,
-        geam_commit: None,
         packages,
     };
     let verification_path = package_dir.join("geam-verification.json");
@@ -258,15 +256,6 @@ fn collect_local_dependency_table(
             names.insert(package_name.to_string());
         }
     }
-}
-
-pub fn write_verification(root: &Path, artifacts: &PackageArtifacts) -> Result<()> {
-    let path = root.join(".geam/target/package/geam-verification.json");
-    fs::write(
-        &path,
-        serde_json::to_vec_pretty(artifacts).context("could not encode verification metadata")?,
-    )
-    .with_context(|| format!("could not write {}", path.display()))
 }
 
 fn inspect_archive(path: &Path, package: &PackageConfig, config: &ReleaseConfig) -> Result<()> {
@@ -414,7 +403,6 @@ mod tests {
             upstream_commit: "a".repeat(40),
             mirror_commit: "b".repeat(40),
             package_version: "1.18.1-geam.1".into(),
-            geam_commit: Some("c".repeat(40)),
             packages: vec![PackageArtifact {
                 name: "geam-gleam-core".into(),
                 file: ".geam/target/package/core.crate".into(),

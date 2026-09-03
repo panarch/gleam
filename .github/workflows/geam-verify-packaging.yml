@@ -22,7 +22,7 @@ env:
 
 jobs:
   verify:
-    name: packages and Geam consumer
+    name: packages
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -69,28 +69,6 @@ jobs:
             -p geam-gleam-hexpm \
             -p geam-gleam-core \
             -- -D warnings
-
-      - name: Checkout current Geam consumer
-        env:
-          GEAM_REPOSITORY: https://github.com/panarch/geam.git
-        run: git clone --depth 1 "$GEAM_REPOSITORY" "$RUNNER_TEMP/geam"
-
-      - name: Install Geam consumer Rust
-        id: geam-rust
-        run: |
-          toolchain="$(sed -n 's/^channel = "\([^"]*\)"$/\1/p' "$RUNNER_TEMP/geam/rust-toolchain.toml")"
-          test -n "$toolchain"
-          rustup toolchain install "$toolchain" --profile minimal --component clippy
-          echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
-
-      - name: Verify packaged Geam consumer
-        env:
-          RUSTUP_TOOLCHAIN: ${{ steps.geam-rust.outputs.toolchain }}
-        run: >-
-          cargo run --manifest-path .geam/tool/Cargo.toml --locked --
-          verify-consumer
-          --geam "$RUNNER_TEMP/geam"
-          --target-dir "$RUNNER_TEMP/geam-target"
 
       - name: Check patch formatting
         run: git diff --check

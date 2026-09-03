@@ -112,7 +112,6 @@ jobs:
           test "$(jq -r .upstream_commit "$manifest")" = "$(awk -F= '$1 == "upstream_commit" { print $2 }' <<< "$metadata")"
           test "$(jq -r .mirror_commit "$manifest")" = "${{ steps.prepared.outputs.commit }}"
           test "$(jq -r .package_version "$manifest")" = "$package_version"
-          test "$(jq -r .geam_commit "$manifest")" != null
           jq -e '
             .packages | map(.name) == [
               "geam-gleam-erlang-term-format",
@@ -354,7 +353,6 @@ jobs:
             echo "- Upstream commit: \`$UPSTREAM_COMMIT\`"
             echo "- Packaging version: \`$PACKAGE_VERSION\`"
             echo "- Published mirror commit: \`$RELEASE_COMMIT\`"
-            echo "- Verified Geam commit: \`$(jq -r .geam_commit "$manifest")\`"
             echo
             echo "## crates.io"
             jq -r --arg version "$PACKAGE_VERSION" \

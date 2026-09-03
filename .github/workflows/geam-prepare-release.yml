@@ -58,9 +58,6 @@ jobs:
             esac
           done <<< "$metadata"
           test "$(jq -r .mirror_commit .geam/target/package/geam-verification.json)" = "${{ github.event.workflow_run.head_sha }}"
-          geam_commit="$(jq -r .geam_commit .geam/target/package/geam-verification.json)"
-          test "$geam_commit" != null
-          echo "geam_commit=$geam_commit" >> "$GITHUB_OUTPUT"
 
       - name: Create or update draft GitHub release
         env:
@@ -70,7 +67,6 @@ jobs:
           UPSTREAM_TAG: ${{ steps.release.outputs.upstream_tag }}
           UPSTREAM_COMMIT: ${{ steps.release.outputs.upstream_commit }}
           VERIFIED_COMMIT: ${{ github.event.workflow_run.head_sha }}
-          GEAM_COMMIT: ${{ steps.release.outputs.geam_commit }}
         shell: bash
         run: |
           set -euo pipefail
@@ -81,7 +77,6 @@ jobs:
             echo "- Upstream commit: \`$UPSTREAM_COMMIT\`"
             echo "- Packaging version: \`$PACKAGE_VERSION\`"
             echo "- Verified mirror commit: \`$VERIFIED_COMMIT\`"
-            echo "- Verified Geam commit: \`$GEAM_COMMIT\`"
             echo
             echo "This is a draft packaging release. Publishing to crates.io is a separate approved action."
             echo

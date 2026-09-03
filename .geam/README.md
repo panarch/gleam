@@ -72,7 +72,7 @@ release untouched.
 | Workflow | Trigger | Responsibility |
 | --- | --- | --- |
 | `Geam: Sync upstream release` | Daily schedule or manual dispatch | Select a stable upstream release tag, merge it into a sync branch, regenerate the overlay, verify packages, and open a PR to `geam-release`. |
-| `Geam: Verify packaging` | PR, `geam-release` push, weekly schedule, or manual dispatch | Test the overlay and mirrored crates, build reviewed `.crate` candidates, and run current Geam tests and Clippy against those archives. |
+| `Geam: Verify packaging` | PR, `geam-release` push, weekly schedule, or manual dispatch | Test the overlay and mirrored crates, then build reviewed `.crate` candidates with recorded checksums. |
 | `Geam: Prepare draft release` | Successful packaging verification on `geam-release` | Attach the verified archives and checksums to a draft GitHub Release. |
 | `Geam: Publish compiler crates` | Manual dispatch from `geam-release` | Reconcile the exact release archives, publish in dependency order through Trusted Publishing, and publish the GitHub prerelease. |
 
@@ -128,14 +128,12 @@ cargo run --manifest-path .geam/tool/Cargo.toml -- apply
 cargo test --manifest-path .geam/tool/Cargo.toml --locked
 cargo run --manifest-path .geam/tool/Cargo.toml -- verify
 cargo run --manifest-path .geam/tool/Cargo.toml -- package
-cargo run --manifest-path .geam/tool/Cargo.toml -- verify-consumer --geam ../geam
 ```
 
-`verify-consumer` extracts the reviewed `.crate` candidates, rewrites a clean Geam
-checkout to use registry-shaped exact dependencies, and supplies only those
-archives through local Cargo patches. It then runs Geam tests and Clippy and
-records both repository commits and every package SHA-256 in
-`.geam/target/package/geam-verification.json`.
+`package` creates the reviewed `.crate` candidates and records the upstream
+commit, mirror commit, package version, and every package SHA-256 in
+`.geam/target/package/geam-verification.json`. Geam compatibility is verified in
+the Geam repository as part of its own integration and release process.
 
 Do not use GitHub's generic **Sync fork** action for this branch. Upstream
 changes enter through reviewed release-tag sync pull requests.
