@@ -72,6 +72,9 @@ fn verify_tracked_changes(root: &Path, config: &ReleaseConfig) -> Result<()> {
             if is_package_readme(path, config) {
                 continue;
             }
+            if is_fork_notice(path) {
+                continue;
+            }
             if GENERATED_VERSION_SOURCES.contains(&path) {
                 continue;
             }
@@ -96,6 +99,9 @@ fn verify_untracked_changes(root: &Path, config: &ReleaseConfig) -> Result<()> {
         if is_package_readme(path, config) {
             continue;
         }
+        if is_fork_notice(path) {
+            continue;
+        }
         bail!("untracked file outside the packaging overlay: {path}");
     }
     Ok(())
@@ -106,6 +112,10 @@ fn is_package_readme(path: &str, config: &ReleaseConfig) -> bool {
         .packages
         .iter()
         .any(|package| path == format!("{}/README.geam.md", package.path))
+}
+
+fn is_fork_notice(path: &str) -> bool {
+    path == "README.md"
 }
 
 fn is_geam_workflow(path: &str) -> bool {
@@ -169,6 +179,8 @@ mod tests {
         };
         assert!(is_package_readme("compiler-core/README.geam.md", &config));
         assert!(!is_package_readme("compiler-core/README.md", &config));
+        assert!(is_fork_notice("README.md"));
+        assert!(!is_fork_notice("docs/README.md"));
     }
 
     #[test]

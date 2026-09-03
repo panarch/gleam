@@ -8,7 +8,7 @@ version = "1.18.1-geam.2"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/panarch/gleam"
-description = "Gleam's Erlang term formatter, packaged for Geam"
+description = "Unofficial compiler component maintained and supported by Geam"
 readme = "README.geam.md"
 publish = ["crates-io"]
 

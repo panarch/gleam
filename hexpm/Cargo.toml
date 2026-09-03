@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 readme = "README.geam.md"
 repository = "https://github.com/panarch/gleam"
-description = "Gleam's Hex client, packaged for Geam"
+description = "Unofficial compiler component maintained and supported by Geam"
 keywords = ["erlang", "gleam", "elixir", "hex", "api-client"]
 categories = ["api-bindings"]
 publish = ["crates-io"]

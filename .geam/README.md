@@ -1,8 +1,17 @@
-# Geam Gleam packaging
+# Unofficial compiler packaging for Geam
+
+> [!CAUTION]
+> This repository is an unofficial fork of the Gleam compiler. It is not
+> affiliated with, endorsed by, maintained by, or supported by the Gleam
+> project or its maintainers. The upstream project does not provide or support
+> a public Rust compiler API. The `geam-gleam-*` crates are packaging artifacts
+> published only so Geam can consume a versioned compiler snapshot. They are not
+> a Rust API provided or supported by the upstream project. Geam alone maintains
+> these crates and absorbs compatibility work caused by upstream changes.
 
 The `geam-release` branch follows immutable Gleam release tags and carries the
 Cargo metadata, generated upstream-version adaptations, and automation needed
-to publish `gleam-core` for Geam.
+to publish compiler components for Geam's versioned integration.
 
 `release.toml` is the canonical release record. The packaging tool derives all
 five package manifests from it. Compiler Rust source remains unchanged except

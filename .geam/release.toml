@@ -13,32 +13,32 @@ path = "erlang-term-format"
 source_name = "erlang-term-format"
 published_name = "geam-gleam-erlang-term-format"
 crate_name = "erlang_term_format"
-description = "Gleam's Erlang term formatter, packaged for Geam"
+description = "Unofficial compiler component maintained and supported by Geam"
 
 [[packages]]
 path = "erlang-generation"
 source_name = "erlang-generation"
 published_name = "geam-gleam-erlang-generation"
 crate_name = "erlang_generation"
-description = "Gleam's Erlang code generator, packaged for Geam"
+description = "Unofficial compiler component maintained and supported by Geam"
 
 [[packages]]
 path = "pretty-arena"
 source_name = "pretty-arena"
 published_name = "geam-gleam-pretty-arena"
 crate_name = "pretty_arena"
-description = "Gleam's document arena, packaged for Geam"
+description = "Unofficial compiler component maintained and supported by Geam"
 
 [[packages]]
 path = "hexpm"
 source_name = "hexpm"
 published_name = "geam-gleam-hexpm"
 crate_name = "hexpm"
-description = "Gleam's Hex client, packaged for Geam"
+description = "Unofficial compiler component maintained and supported by Geam"
 
 [[packages]]
 path = "compiler-core"
 source_name = "gleam-core"
 published_name = "geam-gleam-core"
 crate_name = "gleam_core"
-description = "The Gleam compiler core, packaged for Geam"
+description = "Unofficial compiler component maintained and supported by Geam"

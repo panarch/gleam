@@ -8,7 +8,7 @@ authors = ["Louis Pilfold <louis@lpil.uk>", "Giacomo Cavalieri <info@giacomocava
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/panarch/gleam"
-description = "Gleam's document arena, packaged for Geam"
+description = "Unofficial compiler component maintained and supported by Geam"
 readme = "README.geam.md"
 publish = ["crates-io"]
 
